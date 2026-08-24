@@ -18,4 +18,12 @@ class QueryEngineTest {
 
         assertEquals(TraceIntent.COMPARE_SCANS, parsed.intent)
     }
+
+    @Test
+    fun parsesBareObjectNameAsLastSeenSearch() {
+        val parsed = QueryParser.parse("bottle")
+
+        assertEquals(TraceIntent.LAST_SEEN, parsed.intent)
+        assertEquals("bottle", parsed.objectName)
+    }
 }

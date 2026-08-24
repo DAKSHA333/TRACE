@@ -36,14 +36,6 @@ object QueryParser {
 
     fun parse(raw: String): ParsedTraceQuery {
         val query = raw.trim().lowercase()
-        val intent = when {
-            "what changed" in query || "compare" in query -> TraceIntent.COMPARE_SCANS
-            "resume" in query -> TraceIntent.RESUME_PROJECT
-            "what was on" in query || "list" in query -> TraceIntent.LIST_WORKSPACE
-            "yesterday" in query || "previously" in query || "where was" in query -> TraceIntent.SEEN_AT_TIME
-            "where" in query || "last seen" in query -> TraceIntent.LAST_SEEN
-            else -> TraceIntent.UNKNOWN
-        }
         val time = when {
             "yesterday" in query -> "yesterday"
             "today" in query -> "today"
@@ -56,6 +48,14 @@ object QueryParser {
             .filter { it.isNotBlank() && it !in filler }
             .joinToString(" ")
             .ifBlank { null }
+        val intent = when {
+            "what changed" in query || "compare" in query -> TraceIntent.COMPARE_SCANS
+            "resume" in query -> TraceIntent.RESUME_PROJECT
+            "what was on" in query || "list" in query -> TraceIntent.LIST_WORKSPACE
+            "yesterday" in query || "previously" in query || "where was" in query -> TraceIntent.SEEN_AT_TIME
+            "where" in query || "last seen" in query || objectName != null -> TraceIntent.LAST_SEEN
+            else -> TraceIntent.UNKNOWN
+        }
         return ParsedTraceQuery(intent = intent, objectName = objectName, timeExpression = time)
     }
 }
