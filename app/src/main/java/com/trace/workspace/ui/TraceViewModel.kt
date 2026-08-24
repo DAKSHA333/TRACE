@@ -5,7 +5,6 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.trace.workspace.TraceApplication
-import com.trace.workspace.domain.AnswerFormatter
 import com.trace.workspace.domain.ConfirmedWorkspaceObject
 import com.trace.workspace.domain.DetectedWorkspaceObject
 import com.trace.workspace.domain.TraceAnswer
@@ -102,9 +101,10 @@ class TraceViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun addManualObject(name: String) {
+        if (name.isBlank()) return
         val existing = mutableState.value.confirmedObjects
         val manual = ConfirmedWorkspaceObject(
-            name = name.ifBlank { "manual object" },
+            name = name.trim(),
             label = "manual",
             confidence = 1f,
             box = com.trace.workspace.domain.BoundingBox(0.40f, 0.40f, 0.60f, 0.60f),
@@ -118,11 +118,16 @@ class TraceViewModel(application: Application) : AndroidViewModel(application) {
             val state = mutableState.value
             val projectId = state.selectedProjectId.takeIf { it != 0L } ?: repository.ensureDemoProject()
             val path = state.pendingImagePath ?: return@launch
-            repository.saveScan(projectId, path, state.confirmedObjects)
+            val cleanObjects = state.confirmedObjects
+                .filter { it.name.isNotBlank() && it.name != "manual object" }
+                .distinctBy { it.name.trim().lowercase() }
+            repository.saveScan(projectId, path, cleanObjects)
             mutableState.value = state.copy(
                 pendingImagePath = null,
                 detections = emptyList(),
                 confirmedObjects = emptyList(),
+                query = "Where is my laptop?",
+                answer = null,
                 message = "Scan saved as timestamped memory",
             )
         }
@@ -137,6 +142,10 @@ class TraceViewModel(application: Application) : AndroidViewModel(application) {
             val answer = repository.answer(mutableState.value.query)
             mutableState.value = mutableState.value.copy(answer = answer)
         }
+    }
+
+    fun prepareAsk() {
+        mutableState.value = mutableState.value.copy(answer = null)
     }
 
     fun compareScans() {

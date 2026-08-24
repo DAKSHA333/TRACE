@@ -18,11 +18,20 @@ class TraceRepository(
 
     suspend fun ensureDemoProject(): Long {
         val existing = dao.latestProject()
-        if (existing != null) return existing.id
+        if (existing != null) {
+            if (existing.name == "IoT Prototype") {
+                dao.updateProject(
+                    projectId = existing.id,
+                    name = "My Desk",
+                    description = "Personal workspace memory for everyday study and work.",
+                )
+            }
+            return existing.id
+        }
         return dao.insertProject(
             ProjectEntity(
-                name = "IoT Prototype",
-                description = "Hackathon demo workspace for ESP32, notebook, laptop and components.",
+                name = "My Desk",
+                description = "Personal workspace memory for everyday study and work.",
                 createdAt = System.currentTimeMillis(),
             )
         )

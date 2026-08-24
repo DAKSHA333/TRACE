@@ -26,6 +26,9 @@ interface TraceDao {
     @Insert
     suspend fun insertProject(project: ProjectEntity): Long
 
+    @Query("UPDATE projects SET name = :name, description = :description WHERE id = :projectId")
+    suspend fun updateProject(projectId: Long, name: String, description: String)
+
     @Insert
     suspend fun insertScan(scan: ScanEntity): Long
 

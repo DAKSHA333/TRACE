@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,13 +34,16 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -53,6 +57,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -88,7 +93,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen { Home, Scanner, Confirm, Ask, Compare, Resume, Settings }
+private enum class Screen { Home, Scanner, Confirm, Ask }
 
 @Composable
 private fun TraceTheme(content: @Composable () -> Unit) {
@@ -109,6 +114,19 @@ private fun TraceApp(viewModel: TraceViewModel) {
     val state by viewModel.uiState.collectAsState()
     var screen by remember { mutableStateOf(Screen.Home) }
 
+    fun goBack() {
+        screen = when (screen) {
+            Screen.Home -> Screen.Home
+            Screen.Scanner -> Screen.Home
+            Screen.Confirm -> Screen.Scanner
+            Screen.Ask -> Screen.Home
+        }
+    }
+
+    BackHandler(enabled = true) {
+        goBack()
+    }
+
     if (!state.onboarded) {
         PrivacyOnboarding(onContinue = viewModel::completeOnboarding)
         return
@@ -120,9 +138,19 @@ private fun TraceApp(viewModel: TraceViewModel) {
                 title = {
                     Column {
                         Text("TRACE", fontWeight = FontWeight.Black)
-                        Text("Physical workspace memory", style = MaterialTheme.typography.labelMedium)
+                        Text("Workspace memory", style = MaterialTheme.typography.labelMedium)
                     }
                 },
+                navigationIcon = {
+                    if (screen != Screen.Home) {
+                        IconButton(onClick = { goBack() }) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                ),
             )
         },
     ) { padding ->
@@ -136,24 +164,15 @@ private fun TraceApp(viewModel: TraceViewModel) {
                 Screen.Home -> HomeScreen(
                     message = state.message,
                     onScan = { screen = Screen.Scanner },
-                    onAsk = { screen = Screen.Ask },
-                    onCompare = {
-                        viewModel.compareScans()
-                        screen = Screen.Compare
+                    onAsk = {
+                        viewModel.prepareAsk()
+                        screen = Screen.Ask
                     },
-                    onResume = {
-                        viewModel.resumeWorkspace()
-                        screen = Screen.Resume
-                    },
-                    onSettings = { screen = Screen.Settings },
+                    onClear = viewModel::clearData,
                 )
                 Screen.Scanner -> ScannerScreen(
                     onImageCaptured = {
                         viewModel.analyzeCapturedImage(it)
-                        screen = Screen.Confirm
-                    },
-                    onUseDemo = {
-                        viewModel.useDemoScan()
                         screen = Screen.Confirm
                     },
                 )
@@ -165,7 +184,8 @@ private fun TraceApp(viewModel: TraceViewModel) {
                     onAdd = viewModel::addManualObject,
                     onSave = {
                         viewModel.saveCurrentScan()
-                        screen = Screen.Home
+                        viewModel.prepareAsk()
+                        screen = Screen.Ask
                     },
                     onRetake = { screen = Screen.Scanner },
                 )
@@ -174,11 +194,8 @@ private fun TraceApp(viewModel: TraceViewModel) {
                     answer = state.answer,
                     onQueryChanged = viewModel::updateQuery,
                     onAsk = viewModel::askTrace,
-                    onBack = { screen = Screen.Home },
+                    onNewScan = { screen = Screen.Scanner },
                 )
-                Screen.Compare -> AnswerScreen("Scan comparison", state.answer, onBack = { screen = Screen.Home })
-                Screen.Resume -> AnswerScreen("Resume Workspace", state.answer, onBack = { screen = Screen.Home })
-                Screen.Settings -> SettingsScreen(onClear = viewModel::clearData, onBack = { screen = Screen.Home })
             }
         }
     }
@@ -193,15 +210,20 @@ private fun PrivacyOnboarding(onContinue: () -> Unit) {
             .padding(24.dp),
         verticalArrangement = Arrangement.Center,
     ) {
+        Icon(
+            Icons.Default.Shield,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(44.dp),
+        )
+        Spacer(Modifier.height(16.dp))
         Text("TRACE", style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Black)
         Text("Your physical workspace, remembered.", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(24.dp))
-        Text("TRACE stores scans and memories locally on this phone. The MVP only reports where objects were last observed and never claims live location certainty.")
+        Text("TRACE saves workspace memories on this phone and answers only from what it has observed.")
         Spacer(Modifier.height(24.dp))
-        Button(onClick = onContinue) {
-            Icon(Icons.Default.PlayArrow, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("Start")
+        Button(onClick = onContinue, shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Text("Continue")
         }
     }
 }
@@ -211,25 +233,34 @@ private fun HomeScreen(
     message: String?,
     onScan: () -> Unit,
     onAsk: () -> Unit,
-    onCompare: () -> Unit,
-    onResume: () -> Unit,
-    onSettings: () -> Unit,
+    onClear: () -> Unit,
 ) {
-    LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
-            Text("IoT Prototype", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("Hackathon demo workspace: scan, remember, search, compare, resume.")
+            Text("Remember your desk", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
+            Spacer(Modifier.height(6.dp))
+            Text("Scan your workspace once, then ask where important objects were last seen.")
             message?.let { Text(it, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp)) }
         }
-        item { ActionCard("Workspace scanner", "Capture a timestamped desk memory.", Icons.Default.CameraAlt, onScan) }
-        item { ActionCard("Ask TRACE", "Find the last observed location of an object.", Icons.Default.QuestionAnswer, onAsk) }
-        item { ActionCard("Compare scans", "Detect added, removed and retained objects.", Icons.Default.History, onCompare) }
-        item { ActionCard("Resume workspace", "Reconstruct the latest project context.", Icons.Default.PlayArrow, onResume) }
+        item { ActionCard("Scan workspace", "Capture your desk and save the objects TRACE should remember.", Icons.Default.CameraAlt, onScan) }
+        item { ActionCard("Ask TRACE", "Search your saved workspace memory with a question.", Icons.Default.Search, onAsk) }
         item {
-            OutlinedButton(onClick = onSettings, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Default.Delete, contentDescription = null)
+            Card(
+                shape = RoundedCornerShape(8.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF3EF)),
+            ) {
+                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Inventory2, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Use simple names like laptop, sticky note, charger, calculator.")
+                }
+            }
+        }
+        item {
+            OutlinedButton(onClick = onClear, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
+                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Settings and data deletion")
+                Text("Clear saved memory")
             }
         }
     }
@@ -237,20 +268,32 @@ private fun HomeScreen(
 
 @Composable
 private fun ActionCard(title: String, body: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
-    Card(onClick = onClick, shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
+    Card(
+        onClick = onClick,
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(Color(0xFFEAF3EF), RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            }
             Spacer(Modifier.width(16.dp))
-            Column {
-                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(body)
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(body, style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
 }
 
 @Composable
-private fun ScannerScreen(onImageCaptured: (Uri) -> Unit, onUseDemo: () -> Unit) {
+private fun ScannerScreen(onImageCaptured: (Uri) -> Unit) {
     val context = LocalContext.current
     var hasPermission by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { hasPermission = it }
@@ -260,22 +303,19 @@ private fun ScannerScreen(onImageCaptured: (Uri) -> Unit, onUseDemo: () -> Unit)
     }
 
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Scan workspace", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
+        Text("Place the phone above your desk and capture one clear frame.")
         if (hasPermission) {
             CameraCapture(onImageCaptured = onImageCaptured, modifier = Modifier.weight(1f).fillMaxWidth())
         } else {
             Box(Modifier.weight(1f).fillMaxWidth().background(Color(0xFFEAE6DA)), contentAlignment = Alignment.Center) {
                 Text("Camera permission is needed for real workspace scans.")
             }
-            Button(onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }, shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.CameraAlt, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text("Allow camera")
             }
-        }
-        OutlinedButton(onClick = onUseDemo, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.Add, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("Use demo scan")
         }
     }
 }
@@ -320,6 +360,7 @@ private fun CameraCapture(onImageCaptured: (Uri) -> Unit, modifier: Modifier = M
                     },
                 )
             },
+            shape = RoundedCornerShape(8.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Icon(Icons.Default.CameraAlt, contentDescription = null)
@@ -342,10 +383,10 @@ private fun ConfirmScreen(
     var manualName by remember { mutableStateOf("") }
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
-            Text("Confirm detections", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text("Rename generic labels into personal workspace objects before saving.")
+            Text("Objects remembered", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
+            Text("Keep only real objects from the photo. Rename anything TRACE should remember.")
         }
-        item { EvidenceImage(imagePath) }
+        item { EvidenceImage(imagePath, 210) }
         itemsIndexed(objects) { index, item ->
             var name by remember(item.name) { mutableStateOf(item.name) }
             Card(shape = RoundedCornerShape(8.dp)) {
@@ -354,9 +395,10 @@ private fun ConfirmScreen(
                         value = name,
                         onValueChange = {
                             name = it
-                            onRename(index, it)
+                            onRename(index, it.trim())
                         },
-                        label = { Text(item.label) },
+                        label = { Text("Object name") },
+                        singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
                     IconButton(onClick = { onRemove(index) }) {
@@ -367,9 +409,9 @@ private fun ConfirmScreen(
         }
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(value = manualName, onValueChange = { manualName = it }, label = { Text("Add missed object") }, modifier = Modifier.weight(1f))
+                OutlinedTextField(value = manualName, onValueChange = { manualName = it }, label = { Text("Add missed object") }, singleLine = true, modifier = Modifier.weight(1f))
                 IconButton(onClick = {
-                    onAdd(manualName)
+                    onAdd(manualName.trim())
                     manualName = ""
                 }) {
                     Icon(Icons.Default.Add, contentDescription = "Add")
@@ -378,11 +420,9 @@ private fun ConfirmScreen(
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(onClick = onRetake, modifier = Modifier.weight(1f)) { Text("Retake") }
-                Button(onClick = onSave, modifier = Modifier.weight(1f)) {
-                    Icon(Icons.Default.Save, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Save")
+                OutlinedButton(onClick = onRetake, shape = RoundedCornerShape(8.dp), modifier = Modifier.weight(1f)) { Text("Retake") }
+                Button(onClick = onSave, enabled = objects.isNotEmpty(), shape = RoundedCornerShape(8.dp), modifier = Modifier.weight(1f)) {
+                    Text("Remember")
                 }
             }
         }
@@ -395,67 +435,77 @@ private fun AskTraceScreen(
     answer: com.trace.workspace.domain.TraceAnswer?,
     onQueryChanged: (String) -> Unit,
     onAsk: () -> Unit,
-    onBack: () -> Unit,
+    onNewScan: () -> Unit,
 ) {
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Ask TRACE", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        OutlinedTextField(
-            value = query,
-            onValueChange = onQueryChanged,
-            label = { Text("Where is my blue notebook?") },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Button(onClick = onAsk, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.Search, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("Search memory")
+    LazyColumn(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        item {
+            Text("Ask TRACE", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
+            Text("Ask where an object was last observed in your saved workspace.")
         }
-        answer?.let { AnswerCard(it) }
-        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back") }
+        item {
+            OutlinedTextField(
+                value = query,
+                onValueChange = onQueryChanged,
+                label = { Text("Example: Where is my laptop?") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        item {
+            Button(onClick = onAsk, enabled = query.isNotBlank(), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                Icon(Icons.Default.Search, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Search memory")
+            }
+        }
+        item {
+            answer?.let { AnswerCard(it) } ?: EmptyAnswerCard()
+        }
+        item {
+            OutlinedButton(onClick = onNewScan, shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.CameraAlt, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Scan another workspace")
+            }
+        }
     }
 }
 
 @Composable
-private fun AnswerScreen(title: String, answer: com.trace.workspace.domain.TraceAnswer?, onBack: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        AnswerCard(answer ?: com.trace.workspace.domain.TraceAnswer("No result yet", "Run the action again after saving scans."))
-        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back") }
+private fun EmptyAnswerCard() {
+    Card(
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF3EF)),
+    ) {
+        Text(
+            "Your answer will appear here with the previous workspace image as evidence.",
+            modifier = Modifier.padding(16.dp),
+        )
     }
 }
 
 @Composable
 private fun AnswerCard(answer: com.trace.workspace.domain.TraceAnswer) {
-    Card(shape = RoundedCornerShape(8.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(answer.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+    Card(
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(answer.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
             Text(answer.body)
-            EvidenceImage(answer.evidenceImagePath)
+            EvidenceImage(answer.evidenceImagePath, 220)
         }
     }
 }
 
 @Composable
-private fun EvidenceImage(path: String?) {
+private fun EvidenceImage(path: String?, height: Int = 180) {
     if (path == null) return
     Image(
         painter = rememberAsyncImagePainter(path),
-        contentDescription = "Supporting workspace image",
-        modifier = Modifier.fillMaxWidth().height(180.dp).background(Color(0xFFEAE6DA)),
+        contentDescription = "Saved workspace image",
+        modifier = Modifier.fillMaxWidth().height(height.dp).background(Color(0xFFEAE6DA), RoundedCornerShape(8.dp)),
         contentScale = ContentScale.Crop,
     )
-}
-
-@Composable
-private fun SettingsScreen(onClear: () -> Unit, onBack: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text("TRACE keeps hackathon MVP data locally on this phone.")
-        Button(onClick = onClear, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.Delete, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("Delete local memory")
-        }
-        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back") }
-    }
 }
