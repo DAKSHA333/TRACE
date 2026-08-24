@@ -49,7 +49,12 @@ class MediaPipeWorkspaceObjectDetector(
                 .filter { it.confidence >= 0.35f }
                 .distinctBy { it.label.lowercase() }
                 .take(8)
-                .ifEmpty { fallback.detect(imagePath) }
+                .let { detections ->
+                    DemoWorkspaceHeuristics.merge(
+                        modelDetections = detections.ifEmpty { fallback.detect(imagePath) },
+                        heuristicDetections = DemoWorkspaceHeuristics.detect(bitmap),
+                    )
+                }
         }.getOrElse {
             fallback.detect(imagePath)
         }

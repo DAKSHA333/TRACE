@@ -28,13 +28,15 @@ Captured desk image
   - left / center / right
   - back / middle / front
 - Basic color extraction is added from the detected object crop
+- Demo-workspace heuristics supplement MediaPipe for the specific judge-demo objects
 - Basic object relationships are stored and used in answers
 - Direct search works with short queries like `bottle`, `laptop`, `notebook`
 
 ## Current Limits
 
 - EfficientDet Lite is trained on common COCO-style objects, so it can detect things like laptop, bottle, cup, book/notebook, phone, keyboard, mouse, and similar common objects.
-- It will not reliably detect every hackathon object such as ESP32, jumper wires, USB-C hub, custom sensor boards, or sticky notes.
+- TRACE adds a demo-specific heuristic layer for charger, pendrive, calculator, sticky note, blue/yellow notebook, bottle, cup, keyboard, phone, mouse, and earbuds case in the prepared top-down workspace scenes.
+- It will still not reliably detect every arbitrary hackathon object such as ESP32, jumper wires, USB-C hub, or custom sensor boards without a custom trained model.
 - The confirmation screen should stay in the product because users can rename or correct personal objects.
 
 ## Best Demo Setup
