@@ -71,6 +71,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -136,9 +137,18 @@ private fun TraceApp(viewModel: TraceViewModel) {
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text("TRACE", fontWeight = FontWeight.Black)
-                        Text("Workspace memory", style = MaterialTheme.typography.labelMedium)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Image(
+                            painter = painterResource(R.drawable.trace_logo),
+                            contentDescription = "TRACE logo",
+                            modifier = Modifier.size(48.dp),
+                            contentScale = ContentScale.Fit,
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text("TRACE", fontWeight = FontWeight.Black)
+                            Text("Workspace memory", style = MaterialTheme.typography.labelMedium)
+                        }
                     }
                 },
                 navigationIcon = {
@@ -210,14 +220,15 @@ private fun PrivacyOnboarding(onContinue: () -> Unit) {
             .padding(24.dp),
         verticalArrangement = Arrangement.Center,
     ) {
-        Icon(
-            Icons.Default.Shield,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(44.dp),
+        Image(
+            painter = painterResource(R.drawable.trace_logo),
+            contentDescription = "TRACE logo",
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(160.dp),
+            contentScale = ContentScale.Fit,
         )
-        Spacer(Modifier.height(16.dp))
-        Text("TRACE", style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Black)
+        Spacer(Modifier.height(20.dp))
         Text("Your physical workspace, remembered.", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(24.dp))
         Text("TRACE saves workspace memories on this phone and answers only from what it has observed.")
