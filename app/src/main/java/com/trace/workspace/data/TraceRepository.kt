@@ -6,12 +6,16 @@ import com.trace.workspace.domain.QueryParser
 import com.trace.workspace.domain.TraceAnswer
 import com.trace.workspace.domain.TraceIntent
 import com.trace.workspace.domain.WorkspaceReasoner
+import java.text.SimpleDateFormat
 import java.io.File
+import java.util.Date
+import java.util.Locale
 
 class TraceRepository(
     private val dao: TraceDao,
     private val filesDir: File,
 ) {
+    private val answerDateFormat = SimpleDateFormat("dd MMM, h:mm a", Locale.getDefault())
     val projects = dao.observeProjects()
 
     fun scans(projectId: Long) = dao.observeScans(projectId)
@@ -97,7 +101,8 @@ class TraceRepository(
         val parsed = QueryParser.parse(rawQuery)
         return when (parsed.intent) {
             TraceIntent.LAST_SEEN, TraceIntent.SEEN_AT_TIME -> {
-                AnswerFormatter.lastSeen(parsed.objectName?.let { dao.observationsMatching(it).firstOrNull() })
+                parsed.objectName?.let { lastSeenAnswer(it) }
+                    ?: TraceAnswer("Search your memory", "Type an object name, like bottle, laptop or sticky note.")
             }
             TraceIntent.LIST_WORKSPACE -> listWorkspace()
             TraceIntent.COMPARE_SCANS -> compareLatestScans()
@@ -105,6 +110,46 @@ class TraceRepository(
             TraceIntent.UNKNOWN -> TraceAnswer("Try a grounded question", "Ask where an object was last seen, what changed, or resume a workspace.")
         }
     }
+
+    private suspend fun lastSeenAnswer(objectName: String): TraceAnswer {
+        val observation = dao.observationsMatching(objectName).firstOrNull()
+            ?: return AnswerFormatter.lastSeen(null)
+        val related = strongestRelationFor(observation)
+        val relationText = related?.let { " ${it}" }.orEmpty()
+        return TraceAnswer(
+            title = observation.objectName,
+            body = "Last observed ${answerDateFormat.format(Date(observation.capturedAt))} in the ${observation.workspaceZone} area${relationText} of ${observation.projectName}.",
+            evidenceImagePath = observation.imagePath,
+        )
+    }
+
+    private suspend fun strongestRelationFor(observation: ObservationWithContext): String? {
+        val objects = observationsForScan(observation.scanId)
+        val relationships = dao.relationshipsForScan(observation.scanId)
+        val relation = relationships.firstOrNull {
+            it.firstObjectId == observation.observationId || it.secondObjectId == observation.observationId
+        } ?: return null
+        val targetId = if (relation.firstObjectId == observation.observationId) relation.secondObjectId else relation.firstObjectId
+        val target = objects.firstOrNull { it.observationId == targetId } ?: return null
+        val phrase = when {
+            relation.firstObjectId == observation.observationId -> relation.relationship.toPhrase()
+            relation.relationship == "LEFT_OF" -> "right of"
+            relation.relationship == "RIGHT_OF" -> "left of"
+            relation.relationship == "ABOVE" -> "below"
+            relation.relationship == "BELOW" -> "above"
+            else -> "near"
+        }
+        return "$phrase ${target.objectName}"
+    }
+
+    private fun String.toPhrase(): String =
+        when (this) {
+            "LEFT_OF" -> "left of"
+            "RIGHT_OF" -> "right of"
+            "ABOVE" -> "above"
+            "BELOW" -> "below"
+            else -> "near"
+        }
 
     suspend fun compareLatestScans(): TraceAnswer {
         val scans = dao.allScansNewestFirst()

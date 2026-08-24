@@ -8,7 +8,7 @@ import com.trace.workspace.TraceApplication
 import com.trace.workspace.domain.ConfirmedWorkspaceObject
 import com.trace.workspace.domain.DetectedWorkspaceObject
 import com.trace.workspace.domain.TraceAnswer
-import com.trace.workspace.vision.DemoObjectDetector
+import com.trace.workspace.vision.MediaPipeWorkspaceObjectDetector
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -31,7 +31,7 @@ data class TraceUiState(
 
 class TraceViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = (application as TraceApplication).repository
-    private val detector = DemoObjectDetector()
+    private val detector = MediaPipeWorkspaceObjectDetector(application)
     private val mutableState = MutableStateFlow(TraceUiState())
 
     val uiState: StateFlow<TraceUiState> = combine(repository.projects, mutableState) { projects, state ->

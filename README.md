@@ -8,7 +8,7 @@ TRACE is a native Android MVP for the iQOO Hackathon Productivity track. It crea
 - CameraX preview and image capture
 - Room database for local projects, scans, known objects, observations, and relationships
 - Local-only storage under app files
-- Deterministic demo object detector behind a `WorkspaceObjectDetector` interface
+- MediaPipe on-device object detector with a deterministic fallback behind a `WorkspaceObjectDetector` interface
 - Manual object confirmation, rename, remove, and add flow
 - Local query parser for last-seen, time-aware, list-workspace, compare-scans, and resume-workspace intents
 - Unit tests for query parsing and workspace reasoning
@@ -38,4 +38,4 @@ The debug APK is generated at `app/build/outputs/apk/debug/app-debug.apk`.
 
 ## Next Integration Step
 
-Replace `DemoObjectDetector` with a MediaPipe implementation that loads a bundled object-detection model and returns labels, confidence scores, and normalized bounding boxes through the existing `WorkspaceObjectDetector` interface.
+Continue Person 2 with OCR and personal-object matching. See `docs/PERSON_2_AI_GUIDE.md`.
